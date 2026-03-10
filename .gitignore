@@ -4,6 +4,9 @@ architecture/
 # 排除待办文件夹（本地单独管理）
 待办/
 
+# 排除 bug 记录文件夹（本地单独管理）
+bug记录/
+
 # 排除协议文件
 MCP_Next_Protocol_Specification.md
 MCP_Protocol_Specification.md
