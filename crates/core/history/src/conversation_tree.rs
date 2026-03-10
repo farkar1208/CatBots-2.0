@@ -1,6 +1,6 @@
 //! 对话树 - 核心数据结构
 
-use crate::{AINode, Message, Node, RootNode, UserNode};
+use crate::{AINode, Message, Node, NodeType, RootNode, UserNode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -78,6 +78,15 @@ impl NodeEnum {
             NodeEnum::Root(_) => None,
             NodeEnum::User(n) => Some(Message::user(&n.content)),
             NodeEnum::AI(n) => Some(Message::assistant(&n.content)),
+        }
+    }
+
+    /// 获取节点类型
+    pub fn node_type(&self) -> NodeType {
+        match self {
+            NodeEnum::Root(_) => NodeType::Root,
+            NodeEnum::User(_) => NodeType::User,
+            NodeEnum::AI(_) => NodeType::AI,
         }
     }
 }

@@ -417,7 +417,7 @@ impl TerminalUI {
 
     fn handle_history_show(&self) -> Result<(), anyhow::Error> {
         if let Some(agent) = &self.agent {
-            let path = agent.get_conversation_path()?;
+            let path = agent.get_conversation_path_sync()?;
             
             println!();
             println!("对话历史:");
@@ -446,7 +446,7 @@ impl TerminalUI {
             println!("──────────────────────────────────────────");
             
             // 使用 agent 的方法获取树信息
-            let path = agent.get_conversation_path()?;
+            let path = agent.get_conversation_path_sync()?;
             
             if path.is_empty() || (path.len() == 1 && path[0] == "root") {
                 println!("📁 root");
@@ -471,7 +471,7 @@ impl TerminalUI {
 
     fn handle_branch(&mut self, node_id: &str) -> Result<(), anyhow::Error> {
         if let Some(agent) = &mut self.agent {
-            agent.branch_from(node_id)?;
+            agent.branch_from_sync(node_id)?;
             println!("✓ 已从节点 {} 创建分支", node_id);
         }
         Ok(())
@@ -479,7 +479,7 @@ impl TerminalUI {
 
     fn handle_goto(&mut self, node_id: &str) -> Result<(), anyhow::Error> {
         if let Some(agent) = &mut self.agent {
-            agent.branch_from(node_id)?;
+            agent.branch_from_sync(node_id)?;
             println!("✓ 已跳转到节点 {}", node_id);
         }
         Ok(())
@@ -487,7 +487,7 @@ impl TerminalUI {
 
     fn handle_history_clear(&mut self) -> Result<(), anyhow::Error> {
         if let Some(agent) = &mut self.agent {
-            agent.clear_history()?;
+            agent.clear_history_sync()?;
             println!("✓ 已清除对话历史");
         }
         Ok(())
@@ -514,7 +514,7 @@ impl TerminalUI {
             println!("  节点:     {}", state.current_node_id);
             
             // 对话数
-            let path = agent.get_conversation_path()?;
+            let path = agent.get_conversation_path_sync()?;
             let msg_count = path.iter().filter(|id| *id != "root").count();
             println!("  对话数:   {}", msg_count);
             

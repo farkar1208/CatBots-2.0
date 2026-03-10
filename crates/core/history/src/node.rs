@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// 节点类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NodeType {
     /// 根节点
     Root,

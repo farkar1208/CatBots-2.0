@@ -2,15 +2,16 @@
 
 use crate::SessionState;
 use catbots_ai::AIController;
-use catbots_history::ConversationTree;
+use catbots_history::{ConversationTree, Handler, NodeProcessor, NodeType, ResultData};
 use catbots_profile::{Profile, ProfileManager};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// 会话代理
 /// 
 /// 核心职责：
-/// - 协调 AI 模块和 History 模块
+/// - 协调 NodeProcessor 和 ProfileManager
 /// - 处理用户输入
 /// - 管理会话状态
 /// - 管理配置切换
@@ -22,8 +23,10 @@ pub struct SessionAgent {
     profile_manager: ProfileManager,
     /// 对话树（共享引用）
     tree: Arc<Mutex<ConversationTree>>,
-    /// AI 控制器
-    ai_controller: AIController,
+    /// 节点处理器
+    processor: NodeProcessor,
+    /// AI 控制器（用于 Handler 注册）
+    ai_controller: Arc<AIController>,
     /// 历史文件路径
     history_path: Option<PathBuf>,
 }
@@ -32,12 +35,38 @@ impl SessionAgent {
     /// 创建新的会话代理
     pub fn new(profile_manager: ProfileManager) -> Self {
         let tree = Arc::new(Mutex::new(ConversationTree::new()));
-        let ai_controller = AIController::new(tree.clone());
+        let ai_controller = Arc::new(AIController::new());
         
+        // 获取默认 Profile 配置
+        let (model, api_base, temperature, max_tokens) = profile_manager
+            .get("default")
+            .map(|p| {
+                (
+                    p.model.clone(),
+                    p.api_base.clone(),
+                    p.parameters.temperature,
+                    p.parameters.max_tokens,
+                )
+            })
+            .unwrap_or_else(|| {
+                ("openai/gpt-4o".to_string(), None, Some(0.7), Some(4096))
+            });
+
+        let processor = NodeProcessor::new(tree.clone())
+            .with_default_model(model)
+            .with_default_api_base(api_base.unwrap_or_default())
+            .with_default_temperature(temperature.unwrap_or(0.7))
+            .with_default_max_tokens(max_tokens.unwrap_or(4096));
+
+        // 注册 AI 处理器
+        let mut processor = processor;
+        processor.register_handler(NodeType::User, ai_controller.clone());
+
         Self {
             state: SessionState::new(),
             profile_manager,
             tree,
+            processor,
             ai_controller,
             history_path: None,
         }
@@ -45,12 +74,36 @@ impl SessionAgent {
 
     /// 使用现有对话树创建会话代理
     pub fn with_tree(profile_manager: ProfileManager, tree: Arc<Mutex<ConversationTree>>) -> Self {
-        let ai_controller = AIController::new(tree.clone());
+        let ai_controller = Arc::new(AIController::new());
+        
+        let (model, api_base, temperature, max_tokens) = profile_manager
+            .get("default")
+            .map(|p| {
+                (
+                    p.model.clone(),
+                    p.api_base.clone(),
+                    p.parameters.temperature,
+                    p.parameters.max_tokens,
+                )
+            })
+            .unwrap_or_else(|| {
+                ("openai/gpt-4o".to_string(), None, Some(0.7), Some(4096))
+            });
+
+        let processor = NodeProcessor::new(tree.clone())
+            .with_default_model(model)
+            .with_default_api_base(api_base.unwrap_or_default())
+            .with_default_temperature(temperature.unwrap_or(0.7))
+            .with_default_max_tokens(max_tokens.unwrap_or(4096));
+
+        let mut processor = processor;
+        processor.register_handler(NodeType::User, ai_controller.clone());
         
         Self {
             state: SessionState::new(),
             profile_manager,
             tree,
+            processor,
             ai_controller,
             history_path: None,
         }
@@ -62,8 +115,14 @@ impl SessionAgent {
         let tree = ConversationTree::load_from_file(&path)?;
         let tree_arc = Arc::new(Mutex::new(tree));
         
-        self.tree = tree_arc.clone();
-        self.ai_controller = AIController::new(tree_arc);
+        // 重新创建 processor
+        let ai_controller = Arc::new(AIController::new());
+        let mut processor = NodeProcessor::new(tree_arc.clone());
+        processor.register_handler(NodeType::User, ai_controller.clone());
+        
+        self.tree = tree_arc;
+        self.processor = processor;
+        self.ai_controller = ai_controller;
         self.history_path = Some(path);
         
         Ok(self)
@@ -76,12 +135,37 @@ impl SessionAgent {
         // 加载历史
         let tree = ConversationTree::load_from_file(&history_path)?;
         let tree_arc = Arc::new(Mutex::new(tree));
-        let ai_controller = AIController::new(tree_arc.clone());
+        
+        let ai_controller = Arc::new(AIController::new());
+        
+        let (model, api_base, temperature, max_tokens) = profile_manager
+            .get("default")
+            .map(|p| {
+                (
+                    p.model.clone(),
+                    p.api_base.clone(),
+                    p.parameters.temperature,
+                    p.parameters.max_tokens,
+                )
+            })
+            .unwrap_or_else(|| {
+                ("openai/gpt-4o".to_string(), None, Some(0.7), Some(4096))
+            });
+
+        let processor = NodeProcessor::new(tree_arc.clone())
+            .with_default_model(model)
+            .with_default_api_base(api_base.unwrap_or_default())
+            .with_default_temperature(temperature.unwrap_or(0.7))
+            .with_default_max_tokens(max_tokens.unwrap_or(4096));
+
+        let mut processor = processor;
+        processor.register_handler(NodeType::User, ai_controller.clone());
         
         Ok(Self {
             state: SessionState::new(),
             profile_manager,
             tree: tree_arc,
+            processor,
             ai_controller,
             history_path: Some(history_path),
         })
@@ -104,14 +188,22 @@ impl SessionAgent {
         // 1. 从 state 获取 currentNode
         let current_node_id = self.state.current_node_id.clone();
         
-        // 2. 从 profile_manager 获取当前 Profile
+        // 2. 从 profile_manager 获取当前 Profile 配置
         let profile = self.get_current_profile()
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("No profile selected"))?;
 
-        // 3. 调用 tree.addUserNode(currentNode, input)
+        // 3. 更新 processor 配置
+        self.processor.update_config(
+            profile.model.clone(),
+            profile.api_base.clone(),
+            profile.parameters.temperature,
+            profile.parameters.max_tokens,
+        );
+
+        // 4. 调用 tree.addUserNode(currentNode, input)
         let user_node_id = {
-            let mut tree = self.tree.lock().map_err(|e| anyhow::anyhow!("Tree lock error: {}", e))?;
+            let mut tree = self.tree.lock().await;
             tree.add_user_node(&current_node_id, input.to_string())
         };
 
@@ -121,27 +213,35 @@ impl SessionAgent {
             "用户节点已添加"
         );
 
-        // 4. 调用 ai_controller.send(userNodeId, profile)
-        let response = self.ai_controller.send(&user_node_id, &profile).await?;
+        // 5. 调用 processor.requestProcess(userNodeId)
+        let result = self.processor.request_process(&user_node_id).await?;
 
-        // 5. 更新 state.setCurrentNode(aiNodeId)
-        self.state.set_current_node(response.node_id.clone());
+        // 6. 从结果中提取 AI 响应
+        let (content, ai_node_id) = match result {
+            ResultData::AI(ai_result) => {
+                (ai_result.content, ai_result.node_id)
+            }
+            _ => return Err(anyhow::anyhow!("Unexpected result type")),
+        };
+
+        // 7. 更新 state.setCurrentNode(aiNodeId)
+        self.state.set_current_node(ai_node_id);
 
         tracing::info!(
-            ai_node_id = %response.node_id,
+            ai_node_id = %self.state.current_node_id,
             "AI 响应已完成"
         );
 
-        // 6. 自动保存历史
-        self.save_history()?;
+        // 8. 自动保存历史
+        self.save_history().await?;
 
-        Ok(response.content)
+        Ok(content)
     }
 
     /// 从指定节点创建分支
-    pub fn branch_from(&mut self, node_id: &str) -> Result<(), anyhow::Error> {
+    pub async fn branch_from(&mut self, node_id: &str) -> Result<(), anyhow::Error> {
         {
-            let tree = self.tree.lock().map_err(|e| anyhow::anyhow!("Tree lock error: {}", e))?;
+            let tree = self.tree.lock().await;
             
             // 验证节点存在
             if tree.get_node(node_id).is_none() {
@@ -153,7 +253,25 @@ impl SessionAgent {
         self.state.set_current_node(node_id.to_string());
         
         // 保存历史
-        self.save_history()?;
+        self.save_history().await?;
+        
+        tracing::info!(node_id = %node_id, "已创建分支");
+        Ok(())
+    }
+
+    /// 从指定节点创建分支（同步版本）
+    pub fn branch_from_sync(&mut self, node_id: &str) -> Result<(), anyhow::Error> {
+        {
+            let tree = self.tree.blocking_lock();
+            
+            // 验证节点存在
+            if tree.get_node(node_id).is_none() {
+                return Err(anyhow::anyhow!("Node '{}' not found", node_id));
+            }
+        }
+        
+        // 设置当前节点为分支点
+        self.state.set_current_node(node_id.to_string());
         
         tracing::info!(node_id = %node_id, "已创建分支");
         Ok(())
@@ -280,22 +398,33 @@ impl SessionAgent {
     }
 
     /// 保存历史到文件
-    pub fn save_history(&self) -> Result<(), anyhow::Error> {
+    pub async fn save_history(&self) -> Result<(), anyhow::Error> {
         if let Some(ref path) = self.history_path {
-            let tree = self.tree.lock().map_err(|e| anyhow::anyhow!("Tree lock error: {}", e))?;
+            let tree = self.tree.lock().await;
             tree.save_to_file(path)?;
         }
         Ok(())
     }
 
     /// 清除历史记录
-    pub fn clear_history(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn clear_history(&mut self) -> Result<(), anyhow::Error> {
         {
-            let mut tree = self.tree.lock().map_err(|e| anyhow::anyhow!("Tree lock error: {}", e))?;
+            let mut tree = self.tree.lock().await;
             tree.clear();
         }
         self.state.set_current_node("root".to_string());
-        self.save_history()?;
+        self.save_history().await?;
+        tracing::info!("已清除对话历史");
+        Ok(())
+    }
+
+    /// 清除历史记录（同步版本）
+    pub fn clear_history_sync(&mut self) -> Result<(), anyhow::Error> {
+        {
+            let mut tree = self.tree.blocking_lock();
+            tree.clear();
+        }
+        self.state.set_current_node("root".to_string());
         tracing::info!("已清除对话历史");
         Ok(())
     }
@@ -325,20 +454,42 @@ impl SessionAgent {
         self.tree.clone()
     }
 
+    /// 获取节点处理器引用
+    pub fn processor(&self) -> &NodeProcessor {
+        &self.processor
+    }
+
     /// 获取 AI 控制器引用
     pub fn ai_controller(&self) -> &AIController {
         &self.ai_controller
     }
 
     /// 获取当前节点下的子节点列表
-    pub fn get_children(&self, node_id: &str) -> Result<Vec<String>, anyhow::Error> {
-        let tree = self.tree.lock().map_err(|e| anyhow::anyhow!("Tree lock error: {}", e))?;
+    pub async fn get_children(&self, node_id: &str) -> Result<Vec<String>, anyhow::Error> {
+        let tree = self.tree.lock().await;
+        Ok(tree.get_children(node_id).iter().map(|s| s.to_string()).collect())
+    }
+
+    /// 获取当前节点下的子节点列表（同步版本）
+    pub fn get_children_sync(&self, node_id: &str) -> Result<Vec<String>, anyhow::Error> {
+        let tree = self.tree.blocking_lock();
         Ok(tree.get_children(node_id).iter().map(|s| s.to_string()).collect())
     }
 
     /// 获取对话历史路径
-    pub fn get_conversation_path(&self) -> Result<Vec<String>, anyhow::Error> {
-        let tree = self.tree.lock().map_err(|e| anyhow::anyhow!("Tree lock error: {}", e))?;
+    pub async fn get_conversation_path(&self) -> Result<Vec<String>, anyhow::Error> {
+        let tree = self.tree.lock().await;
         Ok(tree.get_path(&self.state.current_node_id))
+    }
+
+    /// 获取对话历史路径（同步版本）
+    pub fn get_conversation_path_sync(&self) -> Result<Vec<String>, anyhow::Error> {
+        let tree = self.tree.blocking_lock();
+        Ok(tree.get_path(&self.state.current_node_id))
+    }
+
+    /// 注册自定义 Handler
+    pub fn register_handler(&mut self, node_type: NodeType, handler: Arc<dyn Handler>) {
+        self.processor.register_handler(node_type, handler);
     }
 }

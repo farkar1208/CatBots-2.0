@@ -86,6 +86,7 @@ name = "catbots-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "catbots-ai",
  "catbots-config",
  "catbots-history",
@@ -132,6 +133,7 @@ name = "catbots-history"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "serde",
  "serde_json",
