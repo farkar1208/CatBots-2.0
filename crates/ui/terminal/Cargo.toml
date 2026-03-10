@@ -1,0 +1,12 @@
+[package]
+name = "catbots-terminal"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+catbots-agent.workspace = true
+catbots-config.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true

@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "app",
+    "crates/core/agent",
+    "crates/core/ai",
+    "crates/core/history",
+    "crates/core/profile",
+    "crates/infra/persistence",
+    "crates/infra/config",
+    "crates/ui/terminal",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["CatBots Team"]
+license = "MIT"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# 核心库
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+anyhow = "1"
+async-trait = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+dirs = "5"
+
+# HTTP 客户端
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# 内部 crate
+catbots-agent = { path = "crates/core/agent" }
+catbots-ai = { path = "crates/core/ai" }
+catbots-history = { path = "crates/core/history" }
+catbots-profile = { path = "crates/core/profile" }
+catbots-persistence = { path = "crates/infra/persistence" }
+catbots-config = { path = "crates/infra/config" }
+catbots-terminal = { path = "crates/ui/terminal" }

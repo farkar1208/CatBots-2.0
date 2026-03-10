@@ -1,0 +1,18 @@
+[package]
+name = "catbots-agent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+catbots-ai.workspace = true
+catbots-history.workspace = true
+catbots-profile.workspace = true
+catbots-config.workspace = true
+tokio.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+dirs.workspace = true

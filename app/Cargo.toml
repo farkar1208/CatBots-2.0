@@ -1,0 +1,22 @@
+[package]
+name = "catbots"
+version.workspace = true
+edition.workspace = true
+default-run = "catbots"
+
+[[bin]]
+name = "catbots"
+path = "src/main.rs"
+
+[dependencies]
+catbots-agent.workspace = true
+catbots-ai.workspace = true
+catbots-history.workspace = true
+catbots-profile.workspace = true
+catbots-persistence.workspace = true
+catbots-config.workspace = true
+catbots-terminal.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

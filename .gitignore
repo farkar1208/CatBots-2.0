@@ -1,0 +1,17 @@
+# 排除 architecture 文件夹
+architecture/
+
+# 排除协议文件
+MCP_Next_Protocol_Specification.md
+MCP_Protocol_Specification.md
+Skills_Protocol_Specification.md
+
+# Rust 编译产物
+target/
+**/*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
