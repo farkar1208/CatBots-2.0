@@ -35,7 +35,7 @@ impl SessionAgent {
     /// 创建新的会话代理
     pub fn new(profile_manager: ProfileManager) -> Self {
         let tree = Arc::new(Mutex::new(ConversationTree::new()));
-        let ai_controller = Arc::new(AIController::new());
+        let ai_controller = Arc::new(AIController::new(tree.clone()));
         
         // 获取默认 Profile 配置
         let (model, api_base, temperature, max_tokens) = profile_manager
@@ -74,7 +74,7 @@ impl SessionAgent {
 
     /// 使用现有对话树创建会话代理
     pub fn with_tree(profile_manager: ProfileManager, tree: Arc<Mutex<ConversationTree>>) -> Self {
-        let ai_controller = Arc::new(AIController::new());
+        let ai_controller = Arc::new(AIController::new(tree.clone()));
         
         let (model, api_base, temperature, max_tokens) = profile_manager
             .get("default")
@@ -116,7 +116,7 @@ impl SessionAgent {
         let tree_arc = Arc::new(Mutex::new(tree));
         
         // 重新创建 processor
-        let ai_controller = Arc::new(AIController::new());
+        let ai_controller = Arc::new(AIController::new(tree_arc.clone()));
         let mut processor = NodeProcessor::new(tree_arc.clone());
         processor.register_handler(NodeType::User, ai_controller.clone());
         
@@ -136,7 +136,7 @@ impl SessionAgent {
         let tree = ConversationTree::load_from_file(&history_path)?;
         let tree_arc = Arc::new(Mutex::new(tree));
         
-        let ai_controller = Arc::new(AIController::new());
+        let ai_controller = Arc::new(AIController::new(tree_arc.clone()));
         
         let (model, api_base, temperature, max_tokens) = profile_manager
             .get("default")

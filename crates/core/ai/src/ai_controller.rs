@@ -3,23 +3,29 @@
 use crate::{LiteLLMClient, LLMResponse};
 use async_trait::async_trait;
 use catbots_history::{AIResult, AITask, Handler, Message, ResultData, Task, TokenUsage};
+use catbots_history::ConversationTree;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// AI 控制器
 ///
 /// 核心职责：
 /// - 实现 Handler trait
-/// - 接收 AITask，调用 LLM，返回 AIResult
-/// - 不依赖 ConversationTree
+/// - 接收 AITask，调用 LLM，直接向 ConversationTree 添加 AI 节点
+/// - 持有 ConversationTree 引用以直接操作对话树
 pub struct AIController {
     /// LiteLLM 客户端
     client: LiteLLMClient,
+    /// 对话树引用
+    tree: Arc<Mutex<ConversationTree>>,
 }
 
 impl AIController {
     /// 创建新的 AI 控制器
-    pub fn new() -> Self {
+    pub fn new(tree: Arc<Mutex<ConversationTree>>) -> Self {
         Self {
             client: LiteLLMClient::new(),
+            tree,
         }
     }
 
@@ -48,8 +54,14 @@ impl AIController {
             "LLM 响应完成"
         );
 
+        // 直接向对话树添加AI节点
+        let ai_node_id = {
+            let tree = self.tree.lock().await;
+            tree.add_ai_node(&task.node_id, response.content.clone(), response.model.clone())
+        };
+
         Ok(AIResult {
-            node_id: task.node_id,
+            node_id: ai_node_id,  // 返回新创建的AI节点ID
             content: response.content,
             model: response.model,
             token_usage: response.usage.map(|u| TokenUsage {
@@ -119,11 +131,8 @@ impl AIController {
     }
 }
 
-impl Default for AIController {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// 注意：AIController 不再有默认实现，因为它需要 ConversationTree 引用
+// 必须通过 new(tree) 显式创建
 
 #[async_trait]
 impl Handler for AIController {

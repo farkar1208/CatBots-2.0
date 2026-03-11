@@ -140,21 +140,15 @@ impl NodeProcessor {
 
     /// 写回结果到 Tree
     async fn write_result(&self, result: &ResultData) -> Result<()> {
-        let mut tree = self.tree.lock().await;
+        let tree = self.tree.lock().await;
 
         match result {
             ResultData::AI(ai_result) => {
-                // AI 结果需要找到父节点（User 节点）
-                let parent_id = ai_result.node_id.clone();
-                let ai_node_id = tree.add_ai_node(
-                    &parent_id,
-                    ai_result.content.clone(),
-                    ai_result.model.clone(),
-                );
+                // AI 结果：AIController 已经直接添加到 Tree 中，无需再次写入
                 tracing::info!(
-                    ai_node_id = %ai_node_id,
+                    ai_node_id = %ai_result.node_id,
                     model = %ai_result.model,
-                    "已写入 AI 节点"
+                    "AI节点已由AIController直接创建"
                 );
             }
             ResultData::Sampling(sampling_result) => {
