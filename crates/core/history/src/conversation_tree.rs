@@ -89,6 +89,15 @@ impl NodeEnum {
             NodeEnum::AI(_) => NodeType::AI,
         }
     }
+
+    /// 获取完整上下文
+    pub fn get_context(&self) -> &Vec<Message> {
+        match self {
+            NodeEnum::Root(n) => n.get_context(),
+            NodeEnum::User(n) => n.get_context(),
+            NodeEnum::AI(n) => n.get_context(),
+        }
+    }
 }
 
 impl ConversationTree {
@@ -125,7 +134,23 @@ impl ConversationTree {
     /// # 返回
     /// 新创建的节点ID
     pub fn add_user_node(&mut self, parent_id: &str, content: String) -> String {
-        let node = UserNode::new(parent_id.to_string(), content);
+        // 获取父节点的上下文
+        let parent_context = if parent_id == "root" {
+            self.root.get_context().clone()
+        } else {
+            self.node_index.get(parent_id)
+                .map(|n| n.get_context().clone())
+                .unwrap_or_else(|| Vec::new())
+        };
+        
+        // 创建新节点
+        let mut node = UserNode::new(parent_id.to_string(), content);
+        
+        // 构建新节点的上下文：父节点上下文 + 新的用户消息
+        let mut new_context = parent_context.clone();
+        new_context.push(Message::user(&node.content));
+        node.set_context(new_context);
+        
         let node_id = node.id.clone();
         
         // 更新父节点的 children
@@ -149,7 +174,23 @@ impl ConversationTree {
     /// # 返回
     /// 新创建的节点ID
     pub fn add_ai_node(&mut self, parent_id: &str, content: String, model: String) -> String {
-        let node = AINode::new(parent_id.to_string(), content, model);
+        // 获取父节点的上下文
+        let parent_context = if parent_id == "root" {
+            self.root.get_context().clone()
+        } else {
+            self.node_index.get(parent_id)
+                .map(|n| n.get_context().clone())
+                .unwrap_or_else(|| Vec::new())
+        };
+        
+        // 创建新节点
+        let mut node = AINode::new(parent_id.to_string(), content, model);
+        
+        // 构建新节点的上下文：父节点上下文 + 新的AI消息
+        let mut new_context = parent_context.clone();
+        new_context.push(Message::assistant(&node.content));
+        node.set_context(new_context);
+        
         let node_id = node.id.clone();
         
         // 更新父节点的 children
@@ -216,11 +257,18 @@ impl ConversationTree {
     /// - `node_id`: 目标节点ID
     /// 
     /// # 返回
-    /// 从 root 到目标节点的消息列表（不包含 root）
+    /// 从 root 到目标节点的完整消息列表（存储在节点中，已截断）
     pub fn get_context(&self, node_id: &str) -> Vec<Message> {
-        let path = self.get_path(node_id);
-        let messages = self.build_context(&path);
-        self.truncate(messages)
+        if node_id == "root" {
+            return self.root.get_context().clone();
+        }
+        
+        if let Some(node) = self.node_index.get(node_id) {
+            let context = node.get_context().clone();
+            self.truncate(context)
+        } else {
+            Vec::new()
+        }
     }
 
     /// 获取子节点列表
@@ -235,19 +283,7 @@ impl ConversationTree {
         }
     }
 
-    /// 构建上下文（内部方法）
-    /// 
-    /// 将节点路径转换为消息列表
-    fn build_context(&self, path: &[String]) -> Vec<Message> {
-        path.iter()
-            .filter_map(|id| {
-                if id == "root" {
-                    return None;
-                }
-                self.node_index.get(id).and_then(|n| n.to_message())
-            })
-            .collect()
-    }
+
 
     /// 截断消息列表以适应 token 限制（内部方法）
     /// 
@@ -384,6 +420,19 @@ mod tests {
         assert_eq!(path[1], user1);
         assert_eq!(path[2], _ai1);
         assert_eq!(path[3], user2);
+        
+        // 检查节点上下文是否正确设置
+        if let Some(user_node) = tree.get_node(&user1) {
+            assert_eq!(user_node.get_context().len(), 1);
+            assert_eq!(user_node.get_context()[0].role, MessageRole::User);
+            assert_eq!(user_node.get_context()[0].content, "Hello");
+        }
+        
+        if let Some(ai_node) = tree.get_node(&_ai1) {
+            assert_eq!(ai_node.get_context().len(), 2);
+            assert_eq!(ai_node.get_context()[0].role, MessageRole::User);
+            assert_eq!(ai_node.get_context()[1].role, MessageRole::Assistant);
+        }
     }
 
     #[test]
@@ -407,11 +456,21 @@ mod tests {
         let _ai1 = tree.add_ai_node(&user1, "Hi!".to_string(), "gpt-4o".to_string());
         
         // 从 user1 分支
-        let _user2_branch = tree.add_user_node(&user1, "Different topic".to_string());
+        let user2_branch = tree.add_user_node(&user1, "Different topic".to_string());
         
         // 检查 user1 有两个子节点
         let children = tree.get_children(&user1);
         assert_eq!(children.len(), 2);
+        
+        // 检查分支节点的上下文是否独立
+        if let Some(branch_node) = tree.get_node(&user2_branch) {
+            // 分支节点应该只有从根到该节点的上下文
+            assert_eq!(branch_node.get_context().len(), 2); // Hello -> Different topic
+            assert_eq!(branch_node.get_context()[0].role, MessageRole::User);
+            assert_eq!(branch_node.get_context()[0].content, "Hello");
+            assert_eq!(branch_node.get_context()[1].role, MessageRole::User);
+            assert_eq!(branch_node.get_context()[1].content, "Different topic");
+        }
     }
 
     #[test]
@@ -430,5 +489,11 @@ mod tests {
         assert_eq!(tree2.node_count(), tree.node_count());
         let path = tree2.get_path(&_ai1);
         assert_eq!(path.len(), 3);
+        
+        // 验证上下文也被正确序列化和反序列化
+        let context = tree2.get_context(&_ai1);
+        assert_eq!(context.len(), 2);
+        assert_eq!(context[0].role, MessageRole::User);
+        assert_eq!(context[1].role, MessageRole::Assistant);
     }
 }
