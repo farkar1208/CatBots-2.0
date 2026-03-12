@@ -493,3 +493,292 @@ impl SessionAgent {
         self.processor.register_handler(node_type, handler);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use catbots_profile::{ModelParameters, Profile, MemoryStorage};
+
+    /// 创建用于测试的 ProfileManager（使用内存存储）
+    fn create_test_profile_manager() -> ProfileManager {
+        let storage = Box::new(MemoryStorage::new());
+        let mut manager = ProfileManager::new(storage).unwrap();
+
+        // 添加 default profile（SessionAgent 需要它）
+        let default_profile = Profile::new("default", "Default Profile", "openai/gpt-4o")
+            .as_default()
+            .with_parameters(ModelParameters {
+                temperature: Some(0.7),
+                max_tokens: Some(4096),
+                ..Default::default()
+            });
+        manager.add(default_profile).unwrap();
+
+        // 添加测试 Profile
+        let test_profile = Profile::new("test", "Test Profile", "openai/gpt-4o")
+            .with_parameters(ModelParameters {
+                temperature: Some(0.7),
+                max_tokens: Some(1000),
+                ..Default::default()
+            });
+        manager.add(test_profile).unwrap();
+
+        manager
+    }
+
+    #[test]
+    fn test_session_agent_creation() {
+        let profile_manager = create_test_profile_manager();
+        let agent = SessionAgent::new(profile_manager);
+
+        // 验证初始状态
+        assert_eq!(agent.get_current_state().current_node(), "root");
+        assert_eq!(agent.get_current_state().current_profile(), "default");
+        assert!(agent.get_current_profile().is_some());
+    }
+
+    #[test]
+    fn test_profile_switching() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 切换到测试 Profile
+        agent.switch_profile("test").unwrap();
+        assert_eq!(agent.get_current_state().current_profile(), "test");
+
+        // 验证当前 Profile
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.id, "test");
+    }
+
+    #[test]
+    fn test_profile_switch_nonexistent() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 尝试切换到不存在的 Profile
+        let result = agent.switch_profile("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_profile_creation() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 创建新 Profile
+        agent.create_profile("new_profile", Some("anthropic/claude-sonnet-4")).unwrap();
+
+        // 验证 Profile 已创建
+        let profile = agent.profile_manager().get("new_profile");
+        assert!(profile.is_some());
+        assert_eq!(profile.unwrap().model, "anthropic/claude-sonnet-4");
+    }
+
+    #[test]
+    fn test_profile_deletion() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 创建并删除 Profile
+        agent.create_profile("temp_profile", None).unwrap();
+        agent.delete_profile("temp_profile").unwrap();
+
+        // 验证 Profile 已删除
+        let profile = agent.profile_manager().get("temp_profile");
+        assert!(profile.is_none());
+    }
+
+    #[test]
+    fn test_delete_current_profile() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 切换到 test Profile
+        agent.switch_profile("test").unwrap();
+
+        // 尝试删除当前 Profile 应该失败
+        let result = agent.delete_profile("test");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_model_parameters_update() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 更新温度
+        agent.set_temperature(0.9).unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.parameters.temperature, Some(0.9));
+
+        // 更新最大 token
+        agent.set_max_tokens(2000).unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.parameters.max_tokens, Some(2000));
+
+        // 更新 top-p
+        agent.set_top_p(0.8).unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.parameters.top_p, Some(0.8));
+    }
+
+    #[test]
+    fn test_model_parameters_validation() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // agent 层不进行范围验证，所以这些操作会成功
+        // 验证在 UI 层面进行
+        agent.set_temperature(3.0).unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.parameters.temperature, Some(3.0));
+
+        agent.set_top_p(1.5).unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.parameters.top_p, Some(1.5));
+    }
+
+    #[test]
+    fn test_model_update() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 更新模型
+        agent.set_model("anthropic/claude-sonnet-4").unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.model, "anthropic/claude-sonnet-4");
+    }
+
+    #[test]
+    fn test_profile_name_update() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 更新 Profile 名称
+        agent.set_profile_name("My Profile").unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.name, "My Profile");
+    }
+
+    #[test]
+    fn test_api_base_update() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 设置 API 地址
+        agent.set_api_base("http://localhost:11434/v1").unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.api_base, Some("http://localhost:11434/v1".to_string()));
+
+        // 清除 API 地址
+        agent.set_api_base("").unwrap();
+        let profile = agent.get_current_profile().unwrap();
+        assert_eq!(profile.api_base, None);
+    }
+
+    #[test]
+    fn test_history_clear_sync() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 验证初始状态
+        assert_eq!(agent.get_current_state().current_node(), "root");
+
+        // 清空历史
+        agent.clear_history_sync().unwrap();
+        assert_eq!(agent.get_current_state().current_node(), "root");
+    }
+
+    #[test]
+    fn test_conversation_path() {
+        let profile_manager = create_test_profile_manager();
+        let agent = SessionAgent::new(profile_manager);
+
+        // 初始路径应该只包含 root
+        let path = agent.get_conversation_path_sync().unwrap();
+        assert_eq!(path.len(), 1);
+        assert_eq!(path[0], "root");
+    }
+
+    #[test]
+    fn test_get_children() {
+        let profile_manager = create_test_profile_manager();
+        let agent = SessionAgent::new(profile_manager);
+
+        // root 的子节点列表应该为空
+        let children = agent.get_children_sync("root").unwrap();
+        assert!(children.is_empty());
+    }
+
+    #[test]
+    fn test_branch_from_nonexistent() {
+        let profile_manager = create_test_profile_manager();
+        let mut agent = SessionAgent::new(profile_manager);
+
+        // 尝试从不存在的节点分支应该失败
+        let result = agent.branch_from_sync("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_history_file_operations() {
+        let temp_dir = tempdir().unwrap();
+        let history_path = temp_dir.path().join("test_history.json");
+
+        let profile_manager = create_test_profile_manager();
+        let agent = SessionAgent::new(profile_manager)
+            .with_history_file(history_path.clone()).unwrap();
+
+        // 保存历史
+        agent.save_history().await.unwrap();
+
+        // 验证文件已创建
+        assert!(history_path.exists());
+
+        // 从文件加载（使用相同的路径）
+        let profile_manager2 = create_test_profile_manager();
+        let _loaded_agent = SessionAgent::new(profile_manager2)
+            .with_history_file(history_path.clone())
+            .unwrap();
+    }
+
+    #[test]
+    fn test_default_history_path() {
+        let path = SessionAgent::default_history_path().unwrap();
+        assert!(path.ends_with("history.json"));
+    }
+
+    #[test]
+    fn test_tree_reference() {
+        let profile_manager = create_test_profile_manager();
+        let agent = SessionAgent::new(profile_manager);
+
+        // 获取树引用
+        let tree = agent.tree();
+        // 验证树不为空
+        let tree_ref = tree.blocking_lock();
+        assert_eq!(tree_ref.current_node_id(), "root");
+    }
+
+    #[test]
+    fn test_processor_reference() {
+        let profile_manager = create_test_profile_manager();
+        let agent = SessionAgent::new(profile_manager);
+
+        // 获取处理器引用
+        let _processor = agent.processor();
+        // 只验证引用可以获取
+    }
+
+    #[test]
+    fn test_ai_controller_reference() {
+        let profile_manager = create_test_profile_manager();
+        let agent = SessionAgent::new(profile_manager);
+
+        // 获取 AI 控制器引用
+        let _controller = agent.ai_controller();
+        // 只验证引用可以获取
+    }
+}
