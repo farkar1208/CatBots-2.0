@@ -52,6 +52,20 @@ pub enum Command {
     /// 跳转到节点
     Goto { node_id: String },
 
+    // === Tag 标签命令 ===
+    /// 列出节点标签
+    TagList { node_id: Option<String> },
+    /// 为节点添加标签
+    TagAdd { node_id: String, tag_id: String },
+    /// 撤销标签
+    TagRevoke { instance_id: String, reason: Option<String> },
+    /// 列出标签 schema
+    TagSchemaList,
+    /// 显示标签 schema 详情
+    TagSchemaShow { tag_id: String },
+    /// 验证节点创建
+    TagValidate { node_id: String, node_type: Option<String> },
+
     // === 状态 ===
     /// 显示完整状态摘要
     Status,
@@ -114,6 +128,9 @@ impl CommandParser {
 
             // === 历史命令 ===
             "/history" | "/h" => self.parse_history_command(&parts),
+
+            // === Tag 标签命令 ===
+            "/tag" | "/t" => self.parse_tag_command(&parts),
 
             // === 分支命令 ===
             "/branch" => {
@@ -256,6 +273,90 @@ impl CommandParser {
         }
     }
 
+    /// 解析 Tag 标签命令
+    fn parse_tag_command(&self, parts: &[String]) -> Command {
+        match parts.get(1).map(|s| s.as_str()) {
+            // /tag schema ... - Schema 相关命令
+            Some("schema") | Some("s") => {
+                match parts.get(2).map(|s| s.as_str()) {
+                    // /tag schema list - 列出所有 schema
+                    Some("list") | Some("ls") => Command::TagSchemaList,
+                    // /tag schema show <tag_id> - 显示 schema 详情
+                    Some("show") | Some("get") => {
+                        if parts.len() < 4 {
+                            Command::Unknown {
+                                input: "用法: /tag schema show <tag_id>".to_string(),
+                            }
+                        } else {
+                            Command::TagSchemaShow { tag_id: parts[3].clone() }
+                        }
+                    }
+                    _ => Command::Unknown {
+                        input: "用法: /tag schema list | /tag schema show <tag_id>".to_string(),
+                    },
+                }
+            }
+
+            // /tag list [node_id] - 列出节点标签
+            Some("list") | Some("ls") => {
+                let node_id = parts.get(2).cloned();
+                Command::TagList { node_id }
+            }
+
+            // /tag add <node_id> <tag_id> - 添加标签
+            Some("add") | Some("a") => {
+                if parts.len() < 4 {
+                    Command::Unknown {
+                        input: "用法: /tag add <node_id> <tag_id>".to_string(),
+                    }
+                } else {
+                    Command::TagAdd {
+                        node_id: parts[2].clone(),
+                        tag_id: parts[3].clone(),
+                    }
+                }
+            }
+
+            // /tag revoke <instance_id> [reason] - 撤销标签
+            Some("revoke") | Some("r") | Some("rm") => {
+                if parts.len() < 3 {
+                    Command::Unknown {
+                        input: "用法: /tag revoke <instance_id> [原因]".to_string(),
+                    }
+                } else {
+                    let instance_id = parts[2].clone();
+                    let reason = if parts.len() > 3 {
+                        Some(parts[3..].join(" "))
+                    } else {
+                        None
+                    };
+                    Command::TagRevoke { instance_id, reason }
+                }
+            }
+
+            // /tag validate <node_id> [node_type] - 验证节点创建
+            Some("validate") | Some("v") => {
+                if parts.len() < 3 {
+                    Command::Unknown {
+                        input: "用法: /tag validate <node_id> [node_type]".to_string(),
+                    }
+                } else {
+                    let node_id = parts[2].clone();
+                    let node_type = parts.get(3).cloned();
+                    Command::TagValidate { node_id, node_type }
+                }
+            }
+
+            // /tag <node_id> - 快捷方式，列出指定节点的标签
+            Some(node_id) => Command::TagList {
+                node_id: Some(node_id.to_string()),
+            },
+
+            // /tag - 列出当前节点的标签
+            None => Command::TagList { node_id: None },
+        }
+    }
+
     /// 智能分割，支持引号包裹的参数
     fn smart_split(&self, input: &str) -> Vec<String> {
         let mut parts = Vec::new();
@@ -334,6 +435,19 @@ impl CommandParser {
 │  /history clear                  清除对话历史                           │
 │  /branch <节点ID>                从节点创建分支                         │
 │  /goto <节点ID>                  跳转到节点                             │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Tag 标签系统 (别名: /t)                                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│  /tag                            列出当前节点的标签                     │
+│  /tag <node_id>                  列出指定节点的标签                     │
+│  /tag list [node_id]             列出节点标签（同上）                   │
+│  /tag add <node_id> <tag_id>     为节点添加标签                         │
+│  /tag revoke <instance_id> [原因] 撤销标签实例                          │
+│  /tag schema list                列出所有标签定义                       │
+│  /tag schema show <tag_id>       显示标签定义详情                       │
+│  /tag validate <node_id> [类型]  验证节点创建                           │
 └─────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -423,5 +537,58 @@ mod tests {
         
         let cmd = parser.parse("Hello, how are you?");
         assert!(matches!(cmd, Command::Send { content } if content == "Hello, how are you?"));
+    }
+
+    #[test]
+    fn test_tag_command() {
+        let parser = CommandParser::new();
+        
+        // /tag - 列出当前节点标签
+        let cmd = parser.parse("/tag");
+        assert!(matches!(cmd, Command::TagList { node_id: None }));
+        
+        // /tag <node_id> - 快捷方式
+        let cmd = parser.parse("/tag node_123");
+        assert!(matches!(cmd, Command::TagList { node_id: Some(id) } if id == "node_123"));
+        
+        // /tag list
+        let cmd = parser.parse("/tag list");
+        assert!(matches!(cmd, Command::TagList { node_id: None }));
+        
+        // /tag list <node_id>
+        let cmd = parser.parse("/tag list node_123");
+        assert!(matches!(cmd, Command::TagList { node_id: Some(id) } if id == "node_123"));
+        
+        // /tag add <node_id> <tag_id>
+        let cmd = parser.parse("/tag add node_123 blocking");
+        assert!(matches!(cmd, Command::TagAdd { node_id, tag_id } if node_id == "node_123" && tag_id == "blocking"));
+        
+        // /tag revoke <instance_id>
+        let cmd = parser.parse("/tag revoke inst_456");
+        assert!(matches!(cmd, Command::TagRevoke { instance_id, reason: None } if instance_id == "inst_456"));
+        
+        // /tag revoke <instance_id> <reason>
+        let cmd = parser.parse("/tag revoke inst_456 不再需要");
+        assert!(matches!(cmd, Command::TagRevoke { instance_id, reason: Some(r) } if instance_id == "inst_456" && r == "不再需要"));
+        
+        // /tag schema list
+        let cmd = parser.parse("/tag schema list");
+        assert!(matches!(cmd, Command::TagSchemaList));
+        
+        // /tag schema show <tag_id>
+        let cmd = parser.parse("/tag schema show blocking");
+        assert!(matches!(cmd, Command::TagSchemaShow { tag_id } if tag_id == "blocking"));
+        
+        // /tag validate <node_id>
+        let cmd = parser.parse("/tag validate node_123");
+        assert!(matches!(cmd, Command::TagValidate { node_id, node_type: None } if node_id == "node_123"));
+        
+        // /tag validate <node_id> <node_type>
+        let cmd = parser.parse("/tag validate node_123 llm_node");
+        assert!(matches!(cmd, Command::TagValidate { node_id, node_type: Some(t) } if node_id == "node_123" && t == "llm_node"));
+        
+        // 别名 /t
+        let cmd = parser.parse("/t list");
+        assert!(matches!(cmd, Command::TagList { node_id: None }));
     }
 }

@@ -173,6 +173,26 @@ impl TerminalUI {
                 self.handle_goto(&node_id)?;
             }
 
+            // === Tag 标签命令 ===
+            Command::TagList { node_id } => {
+                self.handle_tag_list(node_id.as_deref())?;
+            }
+            Command::TagAdd { node_id, tag_id } => {
+                self.handle_tag_add(&node_id, &tag_id)?;
+            }
+            Command::TagRevoke { instance_id, reason } => {
+                self.handle_tag_revoke(&instance_id, reason.as_deref())?;
+            }
+            Command::TagSchemaList => {
+                self.handle_tag_schema_list()?;
+            }
+            Command::TagSchemaShow { tag_id } => {
+                self.handle_tag_schema_show(&tag_id)?;
+            }
+            Command::TagValidate { node_id, node_type } => {
+                self.handle_tag_validate(&node_id, node_type.as_deref())?;
+            }
+
             // === 状态 ===
             Command::Status => {
                 self.handle_status()?;
@@ -521,6 +541,96 @@ impl TerminalUI {
             println!("──────────────────────────────────────────");
             println!();
         }
+        Ok(())
+    }
+
+    // ============================================================
+    // Tag 标签命令
+    // ============================================================
+
+    fn handle_tag_list(&self, node_id: Option<&str>) -> Result<(), anyhow::Error> {
+        println!();
+        println!("标签列表:");
+        println!("──────────────────────────────────────────");
+        
+        let target_node = node_id.map(|s| s.to_string())
+            .or_else(|| self.agent.as_ref().map(|a| a.get_current_state().current_node_id.clone()));
+        
+        if let Some(node) = target_node {
+            println!("节点: {}", node);
+            println!();
+            println!("(Tag 系统尚未完全集成，此处为占位符)");
+        } else {
+            println!("错误: 无法确定目标节点");
+        }
+        
+        println!("──────────────────────────────────────────");
+        println!();
+        Ok(())
+    }
+
+    fn handle_tag_add(&self, node_id: &str, tag_id: &str) -> Result<(), anyhow::Error> {
+        println!();
+        println!("添加标签:");
+        println!("──────────────────────────────────────────");
+        println!("节点: {}", node_id);
+        println!("标签: {}", tag_id);
+        println!();
+        println!("(Tag 系统尚未完全集成，此处为占位符)");
+        println!("──────────────────────────────────────────");
+        println!();
+        Ok(())
+    }
+
+    fn handle_tag_revoke(&self, instance_id: &str, reason: Option<&str>) -> Result<(), anyhow::Error> {
+        println!();
+        println!("撤销标签:");
+        println!("──────────────────────────────────────────");
+        println!("实例 ID: {}", instance_id);
+        if let Some(r) = reason {
+            println!("原因: {}", r);
+        }
+        println!();
+        println!("(Tag 系统尚未完全集成，此处为占位符)");
+        println!("──────────────────────────────────────────");
+        println!();
+        Ok(())
+    }
+
+    fn handle_tag_schema_list(&self) -> Result<(), anyhow::Error> {
+        println!();
+        println!("标签 Schema 列表:");
+        println!("──────────────────────────────────────────");
+        println!("(Tag 系统尚未完全集成，此处为占位符)");
+        println!("──────────────────────────────────────────");
+        println!();
+        Ok(())
+    }
+
+    fn handle_tag_schema_show(&self, tag_id: &str) -> Result<(), anyhow::Error> {
+        println!();
+        println!("标签 Schema 详情:");
+        println!("──────────────────────────────────────────");
+        println!("标签 ID: {}", tag_id);
+        println!();
+        println!("(Tag 系统尚未完全集成，此处为占位符)");
+        println!("──────────────────────────────────────────");
+        println!();
+        Ok(())
+    }
+
+    fn handle_tag_validate(&self, node_id: &str, node_type: Option<&str>) -> Result<(), anyhow::Error> {
+        println!();
+        println!("验证节点创建:");
+        println!("──────────────────────────────────────────");
+        println!("节点 ID: {}", node_id);
+        if let Some(t) = node_type {
+            println!("节点类型: {}", t);
+        }
+        println!();
+        println!("(Tag 系统尚未完全集成，此处为占位符)");
+        println!("──────────────────────────────────────────");
+        println!();
         Ok(())
     }
 
