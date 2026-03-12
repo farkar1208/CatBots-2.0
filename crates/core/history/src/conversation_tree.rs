@@ -153,6 +153,18 @@ impl ConversationTree {
         })
     }
 
+    /// 获取可变节点引用
+    /// 
+    /// 用于修改节点属性（如标签）
+    pub fn get_node_mut(&mut self, id: &str) -> Option<&mut NodeEnum> {
+        if id == "root" {
+            // root 节点不通过 node_index 存储，这里返回 None
+            None
+        } else {
+            self.node_index.get_mut(id)
+        }
+    }
+
     /// 添加用户节点
     /// 
     /// # 参数
@@ -300,13 +312,13 @@ impl ConversationTree {
     }
 
     /// 获取子节点列表
-    pub fn get_children(&self, node_id: &str) -> Vec<&str> {
+    pub fn get_children(&self, node_id: &str) -> Vec<String> {
         if node_id == "root" {
-            self.root.children.iter().map(|s| s.as_str()).collect()
+            self.root.children.clone()
         } else {
             self.node_index
                 .get(node_id)
-                .map(|n| n.children().iter().map(|s| s.as_str()).collect())
+                .map(|n| n.children().to_vec())
                 .unwrap_or_default()
         }
     }

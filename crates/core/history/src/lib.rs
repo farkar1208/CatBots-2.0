@@ -6,12 +6,14 @@
 //! - `Handler`: 处理器 trait - 纯粹的处理逻辑，不依赖 Tree
 //! - `Node` 系列: 节点数据结构
 //! - `Message`: 消息结构
+//! - `TagIntegration`: 标签系统集成
 
 mod conversation_tree;
 mod handler;
 mod message;
 mod node;
 mod node_processor;
+mod tag_integration;
 
 pub use conversation_tree::{ConversationTree, NodeEnum, NodeTypeInfo};
 pub use handler::{
@@ -19,5 +21,8 @@ pub use handler::{
     SamplingTask, Task, TaskBase, TokenUsage,
 };
 pub use message::{Message, MessageRole};
-pub use node::{AINode, Node, NodeType, RootNode, TokenUsage as NodeTokenUsage, ToolNode, UserNode};
+pub use node::{AINode, Node, NodeType, RootNode, TagInstanceIds, TokenUsage as NodeTokenUsage, ToolNode, UserNode};
 pub use node_processor::NodeProcessor;
+pub use tag_integration::{
+    sync_tags_to_node, TaggedConversationTree, TreeNodeCreator, TreeNodeStorage,
+};

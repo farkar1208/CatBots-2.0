@@ -5,6 +5,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// 节点标签实例ID列表（存储在节点中）
+pub type TagInstanceIds = Vec<String>;
+
 /// 节点类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NodeType {
@@ -118,6 +121,9 @@ pub struct UserNode {
     pub context: Vec<Message>,
     /// 附件列表（文件路径等）
     pub attachments: Vec<String>,
+    /// 标签实例ID列表
+    #[serde(default)]
+    pub tags: TagInstanceIds,
 }
 
 impl UserNode {
@@ -130,6 +136,7 @@ impl UserNode {
             content,
             context: Vec::new(),
             attachments: Vec::new(),
+            tags: Vec::new(),
         }
     }
 }
@@ -182,6 +189,9 @@ pub struct AINode {
     pub model: String,
     /// Token 使用量
     pub token_usage: Option<TokenUsage>,
+    /// 标签实例ID列表
+    #[serde(default)]
+    pub tags: TagInstanceIds,
 }
 
 /// Token 使用量
@@ -203,6 +213,7 @@ impl AINode {
             context: Vec::new(),
             model,
             token_usage: None,
+            tags: Vec::new(),
         }
     }
 }

@@ -4,6 +4,6 @@
 //! - 提供数据持久化接口
 //! - 支持多种存储后端（文件、数据库等）
 
-mod persistence_service;
+pub mod persistence_service;
 
-pub use persistence_service::{PersistenceService, StorageBackend};
+pub use persistence_service::{PersistenceService, StorageBackend, MemoryPersistence, FilePersistence};

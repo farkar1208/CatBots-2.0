@@ -145,6 +145,7 @@ impl PersistenceService for FilePersistence {
 }
 
 /// 内存持久化服务（用于测试）
+#[derive(Clone)]
 pub struct MemoryPersistence {
     data: Arc<Mutex<HashMap<String, Vec<u8>>>>,
 }

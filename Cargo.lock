@@ -136,6 +136,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "catbots-tag",
  "chrono",
  "serde",
  "serde_json",
@@ -168,6 +169,20 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "catbots-tag"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "catbots-persistence",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
  "uuid",
 ]
 

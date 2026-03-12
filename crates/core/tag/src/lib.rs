@@ -1,0 +1,21 @@
+pub mod types;
+pub mod storage;
+pub mod registry;
+pub mod validator;
+pub mod inheritance;
+pub mod operator;
+pub mod lifecycle;
+pub mod audit;
+pub mod manager;
+pub mod persistence;
+
+pub use types::*;
+pub use storage::TagStorage;
+pub use registry::TagSchemaRegistry;
+pub use validator::TagValidator;
+pub use inheritance::{TagInheritance, NodeStorage};
+pub use operator::TagOperator;
+pub use lifecycle::LifecycleController;
+pub use audit::AuditLogger;
+pub use manager::{TagManager, NodeCreator};
+pub use persistence::{PersistentTagStorage, PersistentTagSchemaRegistry};

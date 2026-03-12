@@ -6,6 +6,7 @@ members = [
     "crates/core/ai",
     "crates/core/history",
     "crates/core/profile",
+    "crates/core/tag",
     "crates/infra/persistence",
     "crates/infra/config",
     "crates/ui/terminal",
@@ -40,6 +41,7 @@ catbots-agent = { path = "crates/core/agent" }
 catbots-ai = { path = "crates/core/ai" }
 catbots-history = { path = "crates/core/history" }
 catbots-profile = { path = "crates/core/profile" }
+catbots-tag = { path = "crates/core/tag" }
 catbots-persistence = { path = "crates/infra/persistence" }
 catbots-config = { path = "crates/infra/config" }
 catbots-terminal = { path = "crates/ui/terminal" }
