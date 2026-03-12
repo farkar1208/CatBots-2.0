@@ -55,6 +55,7 @@ pub struct RootNode {
     pub children: Vec<String>,
     pub timestamp: DateTime<Utc>,
     /// 完整上下文（对于根节点为空）
+    #[serde(default)]
     pub context: Vec<Message>,
 }
 
@@ -118,6 +119,7 @@ pub struct UserNode {
     pub timestamp: DateTime<Utc>,
     pub content: String,
     /// 完整上下文（从根节点到当前节点的完整消息历史）
+    #[serde(default)]
     pub context: Vec<Message>,
     /// 附件列表（文件路径等）
     pub attachments: Vec<String>,
@@ -184,6 +186,7 @@ pub struct AINode {
     pub timestamp: DateTime<Utc>,
     pub content: String,
     /// 完整上下文（从根节点到当前节点的完整消息历史）
+    #[serde(default)]
     pub context: Vec<Message>,
     /// 使用的模型名称
     pub model: String,
@@ -261,6 +264,7 @@ pub struct ToolNode {
     pub timestamp: DateTime<Utc>,
     pub tool_name: String,
     /// 完整上下文（从根节点到当前节点的完整消息历史）
+    #[serde(default)]
     pub context: Vec<Message>,
     pub input: serde_json::Value,
     pub output: serde_json::Value,
