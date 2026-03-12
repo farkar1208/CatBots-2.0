@@ -13,7 +13,7 @@ mod message;
 mod node;
 mod node_processor;
 
-pub use conversation_tree::{ConversationTree, NodeEnum};
+pub use conversation_tree::{ConversationTree, NodeEnum, NodeTypeInfo};
 pub use handler::{
     AIResult, AITask, Handler, ModelPreferences, ResultBase, ResultData, SamplingResult,
     SamplingTask, Task, TaskBase, TokenUsage,

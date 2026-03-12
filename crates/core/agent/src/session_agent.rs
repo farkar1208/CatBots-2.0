@@ -242,19 +242,19 @@ impl SessionAgent {
     pub async fn branch_from(&mut self, node_id: &str) -> Result<(), anyhow::Error> {
         {
             let tree = self.tree.lock().await;
-            
-            // 验证节点存在
-            if tree.get_node(node_id).is_none() {
+
+            // 验证节点存在（使用轻量级的 get_node_info）
+            if tree.get_node_info(node_id).is_none() {
                 return Err(anyhow::anyhow!("Node '{}' not found", node_id));
             }
         }
-        
+
         // 设置当前节点为分支点
         self.state.set_current_node(node_id.to_string());
-        
+
         // 保存历史
         self.save_history().await?;
-        
+
         tracing::info!(node_id = %node_id, "已创建分支");
         Ok(())
     }
@@ -263,16 +263,16 @@ impl SessionAgent {
     pub fn branch_from_sync(&mut self, node_id: &str) -> Result<(), anyhow::Error> {
         {
             let tree = self.tree.blocking_lock();
-            
-            // 验证节点存在
-            if tree.get_node(node_id).is_none() {
+
+            // 验证节点存在（使用轻量级的 get_node_info）
+            if tree.get_node_info(node_id).is_none() {
                 return Err(anyhow::anyhow!("Node '{}' not found", node_id));
             }
         }
-        
+
         // 设置当前节点为分支点
         self.state.set_current_node(node_id.to_string());
-        
+
         tracing::info!(node_id = %node_id, "已创建分支");
         Ok(())
     }

@@ -9,8 +9,8 @@
 //! - 写回 Tree
 
 use crate::{
-    AITask, AIResult, ConversationTree, Handler, Message, NodeEnum, NodeType, ResultData,
-    SamplingResult, SamplingTask, Task, TaskBase,
+    AITask, ConversationTree, Handler, Message, NodeTypeInfo, NodeType, ResultData, Task,
+    TaskBase,
 };
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
@@ -89,23 +89,20 @@ impl NodeProcessor {
     /// # 返回
     /// 处理结果
     pub async fn request_process(&self, node_id: &str) -> Result<ResultData> {
-        // 1. 获取节点信息
-        let node = {
+        // 1. 一次性获取节点信息和上下文（减少锁持有时间）
+        let (node_info, messages) = {
             let tree = self.tree.lock().await;
-            tree.get_node(node_id)
-                .ok_or_else(|| anyhow!("节点不存在: {}", node_id))?
+            let info = tree
+                .get_node_info(node_id)
+                .ok_or_else(|| anyhow!("节点不存在: {}", node_id))?;
+            let msgs = tree.get_context(node_id);
+            (info, msgs)
         };
 
-        // 2. 获取上下文
-        let messages = {
-            let tree = self.tree.lock().await;
-            tree.get_context(node_id)
-        };
+        // 2. 构建任务（使用轻量级的 node_info）
+        let task = self.build_task_from_info(&node_info, messages)?;
 
-        // 3. 构建任务
-        let task = self.build_task(&node, messages)?;
-
-        // 4. 分发到处理器
+        // 3. 分发到处理器
         let handler = self
             .handlers
             .get(&task.node_type())
@@ -113,19 +110,19 @@ impl NodeProcessor {
 
         let result = handler.handle(task).await?;
 
-        // 5. 写回结果
+        // 4. 写回结果
         self.write_result(&result).await?;
 
         Ok(result)
     }
 
-    /// 构建 Task
-    fn build_task(&self, node: &NodeEnum, messages: Vec<Message>) -> Result<Task> {
-        match node {
-            NodeEnum::User(_) => {
+    /// 构建 Task（从节点信息）
+    fn build_task_from_info(&self, node_info: &NodeTypeInfo, messages: Vec<Message>) -> Result<Task> {
+        match node_info.node_type {
+            NodeType::User => {
                 // User 节点 -> AI 任务
                 Ok(Task::AI(AITask {
-                    node_id: node.id().to_string(),
+                    node_id: node_info.id.clone(),
                     messages,
                     model: self.default_model.clone(),
                     api_base: self.default_api_base.clone(),
@@ -134,13 +131,15 @@ impl NodeProcessor {
                     top_p: None,
                 }))
             }
-            _ => Err(anyhow!("不支持的节点类型: {:?}", node.node_type())),
+            _ => Err(anyhow!("不支持的节点类型: {:?}", node_info.node_type)),
         }
     }
 
     /// 写回结果到 Tree
     async fn write_result(&self, result: &ResultData) -> Result<()> {
-        let tree = self.tree.lock().await;
+        // 注意：这个方法当前保留锁是为了未来可能的扩展
+        // AIController 已经直接添加节点到 Tree，这里主要用于日志记录
+        let _tree = self.tree.lock().await;
 
         match result {
             ResultData::AI(ai_result) => {

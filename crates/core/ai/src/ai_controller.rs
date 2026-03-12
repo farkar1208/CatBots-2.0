@@ -56,7 +56,7 @@ impl AIController {
 
         // 直接向对话树添加AI节点
         let ai_node_id = {
-            let tree = self.tree.lock().await;
+            let mut tree = self.tree.lock().await;
             tree.add_ai_node(&task.node_id, response.content.clone(), response.model.clone())
         };
 

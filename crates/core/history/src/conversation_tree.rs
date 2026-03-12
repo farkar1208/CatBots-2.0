@@ -5,6 +5,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// 节点信息（轻量级）
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeTypeInfo {
+    /// 节点 ID
+    pub id: String,
+    /// 节点类型
+    pub node_type: NodeType,
+}
+
 /// 对话树
 /// 
 /// 核心职责：
@@ -117,12 +126,31 @@ impl ConversationTree {
     }
 
     /// 获取节点（返回克隆）
+    /// 
+    /// 注意：此方法会克隆整个节点（包括 context），在性能敏感的场景中
+    /// 请考虑使用 `get_node_info` 方法来仅获取节点的类型和 ID。
     pub fn get_node(&self, id: &str) -> Option<NodeEnum> {
         if id == "root" {
             Some(NodeEnum::Root(self.root.clone()))
         } else {
             self.node_index.get(id).cloned()
         }
+    }
+
+    /// 获取节点信息（轻量级，仅返回类型和 ID）
+    /// 
+    /// 此方法不会克隆节点内容，适用于只需要节点类型和 ID 的场景。
+    pub fn get_node_info(&self, id: &str) -> Option<NodeTypeInfo> {
+        let node_type = if id == "root" {
+            Some(NodeType::Root)
+        } else {
+            self.node_index.get(id).map(|n| n.node_type())
+        };
+
+        node_type.map(|nt| NodeTypeInfo {
+            id: id.to_string(),
+            node_type: nt,
+        })
     }
 
     /// 添加用户节点
